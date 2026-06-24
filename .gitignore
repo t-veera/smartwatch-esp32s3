@@ -1,0 +1,21 @@
+# --- ESP-IDF build artifacts ---
+build/
+sdkconfig
+sdkconfig.old
+sdkconfig.ci
+
+# --- ESP-IDF component manager ---
+# Pulled on demand; reproducibility comes from idf_component.yml constraints.
+managed_components/
+dependencies.lock
+
+# --- Editor / IDE ---
+.vscode/
+.idea/
+*.swp
+*~
+
+# --- OS cruft ---
+.DS_Store
+Thumbs.db
+desktop.ini

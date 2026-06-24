@@ -1,0 +1,24 @@
+## Field Pocket Watch — component dependencies
+##
+## Resolved by the ESP-IDF component manager. This manifest lives in main/
+## (the manager only reads idf_component.yml inside component directories,
+## not the repo root).
+##
+## The heavy framework deps below are introduced in Step 1, when the BSP and
+## display come up. They are documented here but commented out so the Step 0
+## empty-main build stays fast and green. Uncomment as each step needs them.
+
+dependencies:
+  idf:
+    version: ">=5.4.1"
+
+  ## --- Enabled in Step 1 (BSP + display/touch bring-up) ---
+  # lvgl/lvgl: "~9.2.0"
+  # espressif/esp-brookesia: ">=0.7.0"
+
+  ## --- Enabled in Step 2 (sensors: QMI8658 IMU, AXP2101 PMIC, PCF85063 RTC) ---
+  # lewisxhe/sensorlib: ">=0.2.0"
+
+  ## BSP from https://github.com/joaquimorg/S3Watch (CO5300 QSPI + FT3168 touch)
+  ## is NOT on the ESP Component Registry. It gets wired into components/ as a
+  ## git submodule / local component during Step 1 rather than via this manifest.
