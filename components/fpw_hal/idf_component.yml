@@ -1,0 +1,5 @@
+## fpw_hal — Field Pocket Watch board HAL
+## QMI8658 IMU driver (accel + wake-on-motion). Proven on this board by S3Watch.
+## Integrates with the BSP's shared i2c_master bus via qmi8658_init(bus, addr).
+dependencies:
+  waveshare/qmi8658: "*"

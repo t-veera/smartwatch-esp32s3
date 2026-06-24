@@ -28,6 +28,11 @@ CONFIG_FREERTOS_HZ=1000
 # --- Main task gets headroom for UI bring-up ---
 CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192
 
+# --- Console on the native USB-Serial/JTAG (the single USB-C port = COM6) ---
+# Routes logs AND interactive input (the settime REPL) over the same port we
+# flash/monitor on, instead of UART0 on GPIO43/44.
+CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y
+
 # --- LVGL ---
 # RGB565 to match the SH8601 QSPI panel; enable the Montserrat font sizes the
 # Field Pocket Watch design system uses (time 48, recorder timer 36, labels 14,
