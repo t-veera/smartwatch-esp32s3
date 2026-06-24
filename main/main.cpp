@@ -10,7 +10,7 @@
 #include "fpw_pmic.h"
 #include "fpw_power.h"
 #include "fpw_rtc.h"
-#include "ui_watchface.h"
+#include "fpw_nav.h"
 
 #include "esp_console.h"
 #include "esp_log.h"
@@ -133,12 +133,12 @@ extern "C" void app_main(void)
 
     if (disp != nullptr) {
         bsp_display_lock(0);
-        ui_watchface_create(lv_screen_active());
+        fpw_nav_init();   // watchface + app screens + swipe navigation
         bsp_display_unlock();
     }
 
     start_console();
-    xTaskCreate(imu_task, "imu", 4096, nullptr, 3, nullptr);
+    xTaskCreate(imu_task, "imu", 4096, nullptr, 2, nullptr);  // below the LVGL render task
     fpw_power_init();
 
     ESP_LOGI(TAG, "Step 4 up — watchface + sleep/wake running.");
