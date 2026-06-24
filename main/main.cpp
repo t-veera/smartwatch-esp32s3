@@ -8,6 +8,7 @@
 #include "bsp/esp32_s3_touch_amoled_2_06.h"
 #include "fpw_imu.h"
 #include "fpw_pmic.h"
+#include "fpw_power.h"
 #include "fpw_rtc.h"
 #include "ui_watchface.h"
 
@@ -99,13 +100,23 @@ extern "C" void app_main(void)
 {
     ESP_LOGI(TAG, "Field Pocket Watch - Step 3 watchface");
 
+    // Power first: make sure the panel/touch rails are on before the BSP inits
+    // the FT3168. A previous screen-off may have gated the AXP2101 ALDO rails,
+    // and the PMU keeps that state across a CPU reset — which would otherwise
+    // brick touch init in bsp_display_start() and boot-loop.
+    bsp_i2c_init();
+    fpw_pmic_init();
+    bsp_power_enable_aldo1(true);
+    bsp_power_enable_aldo2(true);
+    bsp_power_enable_aldo3(true);
+    bsp_power_enable_aldo4(true);
+    vTaskDelay(pdMS_TO_TICKS(120));   // let the rails and FT3168 settle
+
     lv_display_t *disp = bsp_display_start();
     if (disp == nullptr) {
         ESP_LOGE(TAG, "bsp_display_start() failed");
     }
 
-    bsp_i2c_init();
-    fpw_pmic_init();
     fpw_rtc_init();
     fpw_imu_init();
 
@@ -128,6 +139,7 @@ extern "C" void app_main(void)
 
     start_console();
     xTaskCreate(imu_task, "imu", 4096, nullptr, 3, nullptr);
+    fpw_power_init();
 
-    ESP_LOGI(TAG, "Step 3 up — watchface running.");
+    ESP_LOGI(TAG, "Step 4 up — watchface + sleep/wake running.");
 }

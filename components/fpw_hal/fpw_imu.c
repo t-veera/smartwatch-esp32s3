@@ -17,6 +17,8 @@ static const char *TAG = "fpw_imu";
 static qmi8658_dev_t s_imu;
 static bool s_ready = false;
 static volatile uint32_t s_steps = 0;
+static volatile bool s_motion_event = false;
+#define WAKE_MOTION_MG 250.0f   // AC magnitude that counts as a deliberate move
 
 // Peak-detector state (magnitudes in mg, ~1000 mg = 1 g at rest).
 static float    s_baseline   = 1000.0f;
@@ -84,6 +86,10 @@ void fpw_imu_service(void)
     s_baseline += (mag - s_baseline) * 0.05f;   // slow gravity/orientation baseline
     float ac = mag - s_baseline;                // dynamic (motion) component
 
+    if (ac > WAKE_MOTION_MG || ac < -WAKE_MOTION_MG) {
+        s_motion_event = true;
+    }
+
     uint32_t now = (uint32_t)(esp_timer_get_time() / 1000ULL);
     if (ac > STEP_PEAK_MG && s_armed && (now - s_last_step_ms) > STEP_REFRACTORY_MS) {
         s_steps++;
@@ -92,4 +98,11 @@ void fpw_imu_service(void)
     } else if (ac < STEP_REARM_MG) {
         s_armed = true;
     }
+}
+
+bool fpw_imu_consume_motion(void)
+{
+    bool m = s_motion_event;
+    s_motion_event = false;
+    return m;
 }

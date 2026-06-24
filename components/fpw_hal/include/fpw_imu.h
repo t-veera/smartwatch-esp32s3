@@ -22,6 +22,10 @@ void      fpw_imu_service(void);
 uint32_t  fpw_imu_step_count(void);
 void      fpw_imu_reset_steps(void);
 
+// Returns true once if "wake-worthy" motion (e.g. a wrist raise) has occurred
+// since the last call, then clears the flag. Used for wrist-wake.
+bool      fpw_imu_consume_motion(void);
+
 #ifdef __cplusplus
 }
 #endif
