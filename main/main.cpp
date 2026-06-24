@@ -1,14 +1,15 @@
 // Field Pocket Watch — firmware entry point.
 //
-// Step 2: peripheral bring-up. Initialize the PCF85063 RTC, AXP2101 battery
-// gauge and QMI8658 IMU, then log all three to serial once a second. A small
-// console (over USB-Serial/JTAG) exposes `time` and `settime` so the RTC can
-// be set from a terminal.
+// Step 3: the watchface. Bring up the display and peripherals, then build the
+// watchface home screen (time/date/battery/steps). A low-priority task feeds
+// the IMU step detector; the `time`/`settime` console (USB-Serial/JTAG) remains
+// available for setting the RTC.
 
 #include "bsp/esp32_s3_touch_amoled_2_06.h"
 #include "fpw_imu.h"
 #include "fpw_pmic.h"
 #include "fpw_rtc.h"
+#include "ui_watchface.h"
 
 #include "esp_console.h"
 #include "esp_log.h"
@@ -23,45 +24,10 @@
 namespace {
 constexpr char TAG[] = "fpw";
 
-void show_status_label()
+void imu_task(void *)
 {
-    bsp_display_lock(0);
-    lv_obj_t *scr = lv_screen_active();
-    lv_obj_set_style_bg_color(scr, lv_color_black(), LV_PART_MAIN);
-    lv_obj_set_style_bg_opa(scr, LV_OPA_COVER, LV_PART_MAIN);
-
-    lv_obj_t *label = lv_label_create(scr);
-    lv_label_set_text(label, "Field Pocket Watch\nStep 2 - sensors on serial");
-    lv_obj_set_style_text_color(label, lv_color_white(), LV_PART_MAIN);
-    lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
-    lv_obj_center(label);
-    bsp_display_unlock();
-}
-
-void sensor_task(void *)
-{
-    TickType_t last_log = xTaskGetTickCount();
     while (true) {
-        fpw_imu_service();  // feed the step detector at ~50 Hz
-
-        if (xTaskGetTickCount() - last_log >= pdMS_TO_TICKS(1000)) {
-            last_log = xTaskGetTickCount();
-
-            struct tm t;
-            char ts[24] = "----";
-            if (fpw_rtc_get_time(&t) == ESP_OK) {
-                strftime(ts, sizeof(ts), "%Y-%m-%d %H:%M:%S", &t);
-            }
-            float ax = 0, ay = 0, az = 0;
-            fpw_imu_read_accel_mg(&ax, &ay, &az);
-
-            ESP_LOGI(TAG,
-                     "RTC %s%s | batt %d%% (%dmV)%s | accel [%.0f,%.0f,%.0f]mg | steps %u",
-                     ts, fpw_rtc_time_valid() ? "" : " (unset)",
-                     fpw_pmic_battery_percent(), fpw_pmic_battery_mv(),
-                     fpw_pmic_is_charging() ? " CHG" : "",
-                     ax, ay, az, static_cast<unsigned>(fpw_imu_step_count()));
-        }
+        fpw_imu_service();   // ~50 Hz step detection
         vTaskDelay(pdMS_TO_TICKS(20));
     }
 }
@@ -92,8 +58,6 @@ int cmd_settime(int argc, char **argv)
     t.tm_hour = atoi(argv[4]);
     t.tm_min  = atoi(argv[5]);
     t.tm_sec  = atoi(argv[6]);
-
-    // Normalize to fill in tm_wday (PCF85063 stores weekday explicitly).
     time_t tt = mktime(&t);
     localtime_r(&tt, &t);
 
@@ -133,16 +97,13 @@ void start_console()
 
 extern "C" void app_main(void)
 {
-    ESP_LOGI(TAG, "Field Pocket Watch - Step 2 peripheral bring-up");
+    ESP_LOGI(TAG, "Field Pocket Watch - Step 3 watchface");
 
     lv_display_t *disp = bsp_display_start();
     if (disp == nullptr) {
         ESP_LOGE(TAG, "bsp_display_start() failed");
-    } else {
-        show_status_label();
     }
 
-    // Peripherals share the BSP I2C bus (touch already brought it up).
     bsp_i2c_init();
     fpw_pmic_init();
     fpw_rtc_init();
@@ -159,8 +120,14 @@ extern "C" void app_main(void)
         ESP_LOGW(TAG, "RTC was unset; seeded 2026-01-01. Use 'settime YYYY MM DD HH MM SS'.");
     }
 
-    start_console();
-    xTaskCreate(sensor_task, "sensors", 4096, nullptr, 3, nullptr);
+    if (disp != nullptr) {
+        bsp_display_lock(0);
+        ui_watchface_create(lv_screen_active());
+        bsp_display_unlock();
+    }
 
-    ESP_LOGI(TAG, "Step 2 up. Type 'time' or 'settime ...' on the console.");
+    start_console();
+    xTaskCreate(imu_task, "imu", 4096, nullptr, 3, nullptr);
+
+    ESP_LOGI(TAG, "Step 3 up — watchface running.");
 }
