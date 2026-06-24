@@ -1,0 +1,12 @@
+menu "Field Pocket Watch"
+
+    config I2C_MASTER_FREQUENCY
+        int "I2C master bus frequency (Hz)"
+        default 400000
+        help
+            Clock speed for the shared I2C peripheral bus (FT3168 touch,
+            AXP2101 PMU, and in later steps the QMI8658 IMU and PCF85063 RTC).
+            The board support package uses this value for the touch
+            controller's I2C speed. 400 kHz (fast mode) is the board default.
+
+endmenu

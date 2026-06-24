@@ -27,3 +27,13 @@ CONFIG_FREERTOS_HZ=1000
 
 # --- Main task gets headroom for UI bring-up ---
 CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192
+
+# --- LVGL ---
+# RGB565 to match the SH8601 QSPI panel; enable the Montserrat font sizes the
+# Field Pocket Watch design system uses (time 48, recorder timer 36, labels 14,
+# hints 10). Montserrat 14 is LVGL's default and stays the fallback font.
+CONFIG_LV_COLOR_DEPTH_16=y
+CONFIG_LV_FONT_MONTSERRAT_10=y
+CONFIG_LV_FONT_MONTSERRAT_14=y
+CONFIG_LV_FONT_MONTSERRAT_36=y
+CONFIG_LV_FONT_MONTSERRAT_48=y
