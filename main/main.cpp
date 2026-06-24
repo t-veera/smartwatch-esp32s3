@@ -28,7 +28,7 @@ void touch_event_cb(lv_event_t *e)
 
 extern "C" void app_main(void)
 {
-    ESP_LOGI(TAG, "Field Pocket Watch — Step 1 display/touch bring-up");
+    ESP_LOGI(TAG, "Field Pocket Watch - Step 1 display/touch bring-up");
 
     lv_display_t *disp = bsp_display_start();
     if (disp == nullptr) {
