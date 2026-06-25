@@ -1,9 +1,11 @@
 #include "fpw_nav.h"
 #include "ui_watchface.h"
 #include "ui_steps.h"
+#include "ui_trackpad.h"
 #include "fpw_theme.h"
 #include "fpw_statusbar.h"
 
+#include "bsp/esp32_s3_touch_amoled_2_06.h"
 #include "lvgl.h"
 
 namespace {
@@ -20,6 +22,7 @@ struct AppScreen {
 };
 
 lv_obj_t *s_watchface;
+lv_obj_t *s_trackpad;            // button-only full-screen HID trackpad
 AppScreen s_apps[APP_COUNT];
 
 void load_screen(lv_obj_t *scr, lv_screen_load_anim_t anim)
@@ -137,6 +140,30 @@ extern "C" void fpw_nav_init(void)
     add_placeholder_body(setup_app_screen(APP_RECORD, LV_DIR_LEFT, LV_SCR_LOAD_ANIM_OVER_LEFT), "Recorder");
     add_back_hint(s_apps[APP_RECORD].scr);
 
+    // Trackpad: opened only by the side button (toggle), not a swipe app and
+    // with no status bar — the whole screen is the touch surface.
+    s_trackpad = lv_obj_create(nullptr);
+    lv_obj_set_style_bg_color(s_trackpad, FPW_COL_BG, 0);
+    lv_obj_set_style_bg_opa(s_trackpad, LV_OPA_COVER, 0);
+    lv_obj_remove_flag(s_trackpad, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_flag(s_trackpad, LV_OBJ_FLAG_CLICKABLE);
+    ui_trackpad_create(s_trackpad);
+
     lv_screen_load(s_watchface);
     lv_timer_create(refresh_cb, 5000, nullptr);
+}
+
+// Toggle the Trackpad from outside the LVGL task (the side button): open it,
+// or return to the watchface if it is already showing. Takes the LVGL lock and
+// triggers activity so the power manager wakes the screen.
+extern "C" void fpw_nav_toggle_trackpad(void)
+{
+    bsp_display_lock(0);
+    if (lv_screen_active() == s_trackpad) {
+        load_screen(s_watchface, LV_SCR_LOAD_ANIM_OVER_TOP);
+    } else {
+        load_screen(s_trackpad, LV_SCR_LOAD_ANIM_OVER_BOTTOM);
+    }
+    lv_disp_trig_activity(nullptr);
+    bsp_display_unlock();
 }

@@ -18,6 +18,10 @@ extern "C" {
 // Call with the LVGL lock held.
 void fpw_nav_init(void);
 
+// Toggle the Trackpad app (side button): open it, or return home if showing.
+// Thread-safe.
+void fpw_nav_toggle_trackpad(void);
+
 #ifdef __cplusplus
 }
 #endif

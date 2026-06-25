@@ -33,6 +33,17 @@ void imu_task(void *)
     }
 }
 
+// Poll the AXP2101 side button; a short press opens the Trackpad app.
+void button_task(void *)
+{
+    while (true) {
+        if (bsp_power_poll_pwr_button_short()) {
+            fpw_nav_toggle_trackpad();
+        }
+        vTaskDelay(pdMS_TO_TICKS(80));
+    }
+}
+
 int cmd_time(int, char **)
 {
     struct tm t;
@@ -139,6 +150,7 @@ extern "C" void app_main(void)
 
     start_console();
     xTaskCreate(imu_task, "imu", 4096, nullptr, 2, nullptr);  // below the LVGL render task
+    xTaskCreate(button_task, "btn", 4096, nullptr, 4, nullptr);
     fpw_power_init();
 
     ESP_LOGI(TAG, "Step 4 up — watchface + sleep/wake running.");
