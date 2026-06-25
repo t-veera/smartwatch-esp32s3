@@ -6,6 +6,7 @@
 #include "fpw_statusbar.h"
 
 #include "bsp/esp32_s3_touch_amoled_2_06.h"
+#include "esp_log.h"
 #include "lvgl.h"
 
 namespace {
@@ -24,6 +25,7 @@ struct AppScreen {
 lv_obj_t *s_watchface;
 lv_obj_t *s_trackpad;            // button-only full-screen HID trackpad
 AppScreen s_apps[APP_COUNT];
+volatile bool s_toggle_req = false;   // set by the button task, handled in LVGL
 
 void load_screen(lv_obj_t *scr, lv_screen_load_anim_t anim)
 {
@@ -65,6 +67,22 @@ void refresh_cb(lv_timer_t *)
     for (int i = 0; i < APP_COUNT; i++) {
         fpw_statusbar_refresh(&s_apps[i].sb);
     }
+}
+
+// Runs in the LVGL task: actually performs the button-requested toggle so the
+// screen-load animation runs in the right context (never from the button task).
+void toggle_cb(lv_timer_t *)
+{
+    if (!s_toggle_req) {
+        return;
+    }
+    s_toggle_req = false;
+    lv_disp_trig_activity(nullptr);
+    // Instant load (no animation): the animated transition floods the SPI flush
+    // queue while BT runs and leaves the screen half-rendered.
+    lv_obj_t *target = (lv_screen_active() == s_trackpad) ? s_watchface : s_trackpad;
+    lv_screen_load(target);
+    ESP_LOGI("fpw_nav", "toggle -> %s", target == s_trackpad ? "trackpad" : "home");
 }
 
 // Create a bare app screen: background, status bar and nav gestures. Content
@@ -151,19 +169,12 @@ extern "C" void fpw_nav_init(void)
 
     lv_screen_load(s_watchface);
     lv_timer_create(refresh_cb, 5000, nullptr);
+    lv_timer_create(toggle_cb, 30, nullptr);   // services button toggle requests
 }
 
-// Toggle the Trackpad from outside the LVGL task (the side button): open it,
-// or return to the watchface if it is already showing. Takes the LVGL lock and
-// triggers activity so the power manager wakes the screen.
+// Called from the button task: only set a flag. The actual screen swap happens
+// in toggle_cb (LVGL task) so the animation is never driven cross-thread.
 extern "C" void fpw_nav_toggle_trackpad(void)
 {
-    bsp_display_lock(0);
-    if (lv_screen_active() == s_trackpad) {
-        load_screen(s_watchface, LV_SCR_LOAD_ANIM_OVER_TOP);
-    } else {
-        load_screen(s_trackpad, LV_SCR_LOAD_ANIM_OVER_BOTTOM);
-    }
-    lv_disp_trig_activity(nullptr);
-    bsp_display_unlock();
+    s_toggle_req = true;
 }

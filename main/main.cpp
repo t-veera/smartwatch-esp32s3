@@ -33,12 +33,18 @@ void imu_task(void *)
     }
 }
 
-// Poll the AXP2101 side button; a short press opens the Trackpad app.
+// Poll the AXP2101 side button; a short press toggles the Trackpad app.
+// Debounced so one press can't fire twice and overlap two screen animations.
 void button_task(void *)
 {
+    TickType_t last = 0;
     while (true) {
         if (bsp_power_poll_pwr_button_short()) {
-            fpw_nav_toggle_trackpad();
+            TickType_t now = xTaskGetTickCount();
+            if (now - last > pdMS_TO_TICKS(600)) {
+                last = now;
+                fpw_nav_toggle_trackpad();
+            }
         }
         vTaskDelay(pdMS_TO_TICKS(80));
     }

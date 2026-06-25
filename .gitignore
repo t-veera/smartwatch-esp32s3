@@ -19,3 +19,6 @@ dependencies.lock
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# --- Work-in-progress (e.g. deferred BLE HID), not part of the build ---
+wip/

@@ -36,7 +36,7 @@ extern "C" void ui_trackpad_create(lv_obj_t *parent)
     grid_line(parent, FPW_SCREEN_W / 2, 0, 1, FPW_SCREEN_H, LV_OPA_50);
     grid_line(parent, 0, FPW_SCREEN_H / 2, FPW_SCREEN_W, 1, LV_OPA_50);
 
-    // Minimal connection status, tucked at the bottom.
+    // Minimal status line (BLE comes back later).
     s_status = lv_label_create(parent);
     lv_label_set_text(s_status, "not connected");
     lv_obj_set_style_text_font(s_status, FPW_FONT_HINT, 0);
