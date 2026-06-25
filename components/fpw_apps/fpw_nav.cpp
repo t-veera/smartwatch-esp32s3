@@ -1,5 +1,6 @@
 #include "fpw_nav.h"
 #include "ui_watchface.h"
+#include "ui_steps.h"
 #include "fpw_theme.h"
 #include "fpw_statusbar.h"
 
@@ -63,7 +64,9 @@ void refresh_cb(lv_timer_t *)
     }
 }
 
-void make_placeholder(AppId id, const char *title, lv_dir_t back_dir, lv_screen_load_anim_t back_anim)
+// Create a bare app screen: background, status bar and nav gestures. Content
+// (placeholder or real UI) is added by the caller.
+lv_obj_t *setup_app_screen(AppId id, lv_dir_t back_dir, lv_screen_load_anim_t back_anim)
 {
     lv_obj_t *scr = lv_obj_create(nullptr);
     lv_obj_set_style_bg_color(scr, FPW_COL_BG, 0);
@@ -77,9 +80,25 @@ void make_placeholder(AppId id, const char *title, lv_dir_t back_dir, lv_screen_
     a.back_anim = back_anim;
 
     fpw_statusbar_create(scr, &a.sb);
-    fpw_statusbar_set_ble(&a.sb, true);
+    fpw_statusbar_set_ble(&a.sb, false);   // no BLE yet -> dim until connected
     fpw_statusbar_set_wifi(&a.sb, false);
 
+    lv_obj_add_event_cb(scr, app_gesture_cb, LV_EVENT_GESTURE, &a);
+    lv_obj_add_event_cb(scr, app_longpress_cb, LV_EVENT_LONG_PRESSED, &a);
+    return scr;
+}
+
+void add_back_hint(lv_obj_t *scr)
+{
+    lv_obj_t *hint = lv_label_create(scr);
+    lv_label_set_text(hint, "swipe back or long-press for watch");
+    lv_obj_set_style_text_font(hint, FPW_FONT_HINT, 0);
+    lv_obj_set_style_text_color(hint, FPW_COL_WHITE_15, 0);
+    lv_obj_align(hint, LV_ALIGN_BOTTOM_MID, 0, -18);
+}
+
+void add_placeholder_body(lv_obj_t *scr, const char *title)
+{
     lv_obj_t *name = lv_label_create(scr);
     lv_label_set_text(name, title);
     lv_obj_set_style_text_font(name, FPW_FONT_VALUE, 0);
@@ -91,15 +110,6 @@ void make_placeholder(AppId id, const char *title, lv_dir_t back_dir, lv_screen_
     lv_obj_set_style_text_font(soon, FPW_FONT_LABEL, 0);
     lv_obj_set_style_text_color(soon, FPW_COL_WHITE_35, 0);
     lv_obj_align(soon, LV_ALIGN_CENTER, 0, 24);
-
-    lv_obj_t *hint = lv_label_create(scr);
-    lv_label_set_text(hint, "swipe back or long-press for watch");
-    lv_obj_set_style_text_font(hint, FPW_FONT_HINT, 0);
-    lv_obj_set_style_text_color(hint, FPW_COL_WHITE_15, 0);
-    lv_obj_align(hint, LV_ALIGN_BOTTOM_MID, 0, -18);
-
-    lv_obj_add_event_cb(scr, app_gesture_cb, LV_EVENT_GESTURE, &a);
-    lv_obj_add_event_cb(scr, app_longpress_cb, LV_EVENT_LONG_PRESSED, &a);
 }
 
 }  // namespace
@@ -112,11 +122,20 @@ extern "C" void fpw_nav_init(void)
     ui_watchface_create(s_watchface);
     lv_obj_add_event_cb(s_watchface, watchface_gesture_cb, LV_EVENT_GESTURE, nullptr);
 
-    // Apps are placeholders for now; back gesture/anim is the reverse of entry.
-    make_placeholder(APP_STEPS,   "Steps",        LV_DIR_BOTTOM, LV_SCR_LOAD_ANIM_OVER_BOTTOM);
-    make_placeholder(APP_CONNECT, "Connectivity", LV_DIR_TOP,    LV_SCR_LOAD_ANIM_OVER_TOP);
-    make_placeholder(APP_METRO,   "Metronome",    LV_DIR_RIGHT,  LV_SCR_LOAD_ANIM_OVER_RIGHT);
-    make_placeholder(APP_RECORD,  "Recorder",     LV_DIR_LEFT,   LV_SCR_LOAD_ANIM_OVER_LEFT);
+    // Steps is a real app; the others are placeholders for now.
+    // Back gesture/anim is the reverse of the entry direction.
+    lv_obj_t *steps_scr = setup_app_screen(APP_STEPS, LV_DIR_BOTTOM, LV_SCR_LOAD_ANIM_OVER_BOTTOM);
+    ui_steps_create(steps_scr);
+    add_back_hint(steps_scr);
+
+    add_placeholder_body(setup_app_screen(APP_CONNECT, LV_DIR_TOP, LV_SCR_LOAD_ANIM_OVER_TOP), "Connectivity");
+    add_back_hint(s_apps[APP_CONNECT].scr);
+
+    add_placeholder_body(setup_app_screen(APP_METRO, LV_DIR_RIGHT, LV_SCR_LOAD_ANIM_OVER_RIGHT), "Metronome");
+    add_back_hint(s_apps[APP_METRO].scr);
+
+    add_placeholder_body(setup_app_screen(APP_RECORD, LV_DIR_LEFT, LV_SCR_LOAD_ANIM_OVER_LEFT), "Recorder");
+    add_back_hint(s_apps[APP_RECORD].scr);
 
     lv_screen_load(s_watchface);
     lv_timer_create(refresh_cb, 5000, nullptr);

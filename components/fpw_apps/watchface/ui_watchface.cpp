@@ -129,7 +129,7 @@ extern "C" void ui_watchface_create(lv_obj_t *parent)
     lv_obj_remove_flag(parent, LV_OBJ_FLAG_SCROLLABLE);
 
     fpw_statusbar_create(parent, &s_wf.sb);
-    fpw_statusbar_set_ble(&s_wf.sb, true);
+    fpw_statusbar_set_ble(&s_wf.sb, false);   // no BLE yet -> dim until connected
     fpw_statusbar_set_wifi(&s_wf.sb, false);
 
     // --- Time: one big label, scaled up via transform (48px is the largest

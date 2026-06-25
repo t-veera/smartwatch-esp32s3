@@ -28,6 +28,17 @@ static uint32_t s_last_step_ms = 0;
 #define STEP_REARM_MG        80.0f   // fall below this to re-arm for next step
 #define STEP_REFRACTORY_MS   300     // min spacing between counted steps
 
+// Day stats derived from steps.
+#define STRIDE_M           0.72f
+#define MAX_PLAUSIBLE_MPS  6.0f      // reject noise faster than ~21 km/h
+static volatile float s_distance_m = 0.0f;
+static volatile float s_max_speed  = 0.0f;   // m/s
+static double   s_moving_ms   = 0.0;         // time spent moving (avg denominator)
+static uint32_t s_last_svc_ms = 0;
+static uint32_t s_step_times[6];             // recent step timestamps (cadence)
+static int      s_st_head = 0;
+static int      s_st_n    = 0;
+
 static bool try_init(uint8_t addr)
 {
     i2c_master_bus_handle_t bus = bsp_i2c_get_handle();
@@ -91,13 +102,61 @@ void fpw_imu_service(void)
     }
 
     uint32_t now = (uint32_t)(esp_timer_get_time() / 1000ULL);
+
+    // Accumulate "moving time" (denominator for average speed).
+    if (s_last_svc_ms != 0) {
+        uint32_t dt = now - s_last_svc_ms;
+        if (dt < 500 && (now - s_last_step_ms) < 2500) {
+            s_moving_ms += dt;
+        }
+    }
+    s_last_svc_ms = now;
+
     if (ac > STEP_PEAK_MG && s_armed && (now - s_last_step_ms) > STEP_REFRACTORY_MS) {
         s_steps++;
         s_last_step_ms = now;
         s_armed = false;
+        s_distance_m += STRIDE_M;
+
+        // Instantaneous speed over the span of the last few steps.
+        s_step_times[s_st_head] = now;
+        s_st_head = (s_st_head + 1) % 6;
+        if (s_st_n < 6) {
+            s_st_n++;
+        }
+        if (s_st_n >= 2) {
+            int oldest = (s_st_head - s_st_n + 6) % 6;
+            uint32_t span = now - s_step_times[oldest];
+            if (span > 0) {
+                float inst = ((s_st_n - 1) * STRIDE_M) / (span / 1000.0f);
+                if (inst < MAX_PLAUSIBLE_MPS && inst > s_max_speed) {
+                    s_max_speed = inst;
+                }
+            }
+        }
     } else if (ac < STEP_REARM_MG) {
         s_armed = true;
     }
+}
+
+float fpw_imu_distance_m(void) { return s_distance_m; }
+float fpw_imu_max_speed_mps(void) { return s_max_speed; }
+
+float fpw_imu_avg_speed_mps(void)
+{
+    double secs = s_moving_ms / 1000.0;
+    return (secs > 1.0) ? (float)(s_distance_m / secs) : 0.0f;
+}
+
+void fpw_imu_reset_stats(void)
+{
+    s_steps = 0;
+    s_distance_m = 0.0f;
+    s_max_speed = 0.0f;
+    s_moving_ms = 0.0;
+    s_st_head = 0;
+    s_st_n = 0;
+    s_last_step_ms = 0;
 }
 
 bool fpw_imu_consume_motion(void)

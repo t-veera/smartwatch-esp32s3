@@ -22,6 +22,12 @@ void      fpw_imu_service(void);
 uint32_t  fpw_imu_step_count(void);
 void      fpw_imu_reset_steps(void);
 
+// Day stats derived from steps. Speeds in m/s, distance in metres.
+float     fpw_imu_distance_m(void);
+float     fpw_imu_avg_speed_mps(void);   // average over time spent moving
+float     fpw_imu_max_speed_mps(void);
+void      fpw_imu_reset_stats(void);      // steps, distance, speeds (the reset button)
+
 // Returns true once if "wake-worthy" motion (e.g. a wrist raise) has occurred
 // since the last call, then clears the flag. Used for wrist-wake.
 bool      fpw_imu_consume_motion(void);

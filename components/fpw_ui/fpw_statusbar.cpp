@@ -4,8 +4,8 @@
 
 namespace {
 constexpr int BAR_H   = 44;
-constexpr int BAR_TOP = 10;   // push below the panel's rounded top corners
-constexpr int INSET   = 30;   // keep icons clear of the rounded corners
+constexpr int BAR_TOP = 16;   // push below the panel's rounded top corners
+constexpr int INSET   = 40;   // keep icons clear of the rounded corners
 
 lv_obj_t *make_icon(lv_obj_t *parent, const char *symbol, lv_color_t color)
 {
@@ -28,7 +28,8 @@ extern "C" void fpw_statusbar_create(lv_obj_t *parent, fpw_statusbar_t *out)
     lv_obj_set_style_pad_all(bar, 0, 0);
     lv_obj_set_style_radius(bar, 0, 0);
 
-    lv_obj_t *bt = make_icon(bar, LV_SYMBOL_BLUETOOTH, FPW_COL_TEAL);
+    // Bluetooth: dim by default; teal only when a connection exists.
+    lv_obj_t *bt = make_icon(bar, LV_SYMBOL_BLUETOOTH, FPW_COL_WHITE_15);
     lv_obj_align(bt, LV_ALIGN_LEFT_MID, INSET, 0);
 
     lv_obj_t *batt = lv_label_create(bar);
