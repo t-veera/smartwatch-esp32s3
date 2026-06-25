@@ -32,14 +32,25 @@ extern "C" void fpw_statusbar_create(lv_obj_t *parent, fpw_statusbar_t *out)
     lv_obj_t *bt = make_icon(bar, LV_SYMBOL_BLUETOOTH, FPW_COL_WHITE_15);
     lv_obj_align(bt, LV_ALIGN_LEFT_MID, INSET, 0);
 
-    lv_obj_t *batt = lv_label_create(bar);
+    // Right cluster (WiFi + battery) in a flex row so both share the bar's
+    // vertical centre — keeps them aligned with the BT icon on the left.
+    lv_obj_t *right = lv_obj_create(bar);
+    lv_obj_remove_flag(right, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_size(right, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+    lv_obj_set_style_bg_opa(right, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(right, 0, 0);
+    lv_obj_set_style_pad_all(right, 0, 0);
+    lv_obj_set_flex_flow(right, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(right, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_column(right, 12, 0);
+    lv_obj_align(right, LV_ALIGN_RIGHT_MID, -INSET, 0);
+
+    lv_obj_t *wifi = make_icon(right, LV_SYMBOL_WIFI, FPW_COL_WHITE_15);
+
+    lv_obj_t *batt = lv_label_create(right);
     lv_label_set_text(batt, "--%");
     lv_obj_set_style_text_font(batt, FPW_FONT_LABEL, 0);
     lv_obj_set_style_text_color(batt, FPW_COL_WHITE_55, 0);
-    lv_obj_align(batt, LV_ALIGN_RIGHT_MID, -INSET, 0);
-
-    lv_obj_t *wifi = make_icon(bar, LV_SYMBOL_WIFI, FPW_COL_WHITE_15);
-    lv_obj_align_to(wifi, batt, LV_ALIGN_OUT_LEFT_MID, -12, 0);
 
     if (out) {
         out->root = bar;
@@ -77,8 +88,5 @@ extern "C" void fpw_statusbar_refresh(fpw_statusbar_t *sb)
     } else {
         lv_label_set_text_fmt(sb->batt, "%d%%", pct);
     }
-    // Battery text width changes with the charge bolt; keep WiFi just left of it.
-    if (sb->wifi) {
-        lv_obj_align_to(sb->wifi, sb->batt, LV_ALIGN_OUT_LEFT_MID, -12, 0);
-    }
+    // The flex row reflows automatically when the battery text width changes.
 }

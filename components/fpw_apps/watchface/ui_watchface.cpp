@@ -136,12 +136,8 @@ extern "C" void ui_watchface_create(lv_obj_t *parent)
     //     built-in Montserrat face). Pivot centred so it grows symmetrically. ---
     s_wf.time = lv_label_create(parent);
     lv_label_set_text(s_wf.time, "00:00");
-    lv_obj_set_style_text_font(s_wf.time, FPW_FONT_TIME, 0);
+    lv_obj_set_style_text_font(s_wf.time, FPW_FONT_CLOCK, 0);  // native large font, no transform
     lv_obj_set_style_text_color(s_wf.time, FPW_COL_WHITE, 0);
-    lv_obj_set_style_transform_pivot_x(s_wf.time, lv_pct(50), 0);
-    lv_obj_set_style_transform_pivot_y(s_wf.time, lv_pct(50), 0);
-    lv_obj_set_style_transform_scale_x(s_wf.time, FPW_TIME_SCALE, 0);
-    lv_obj_set_style_transform_scale_y(s_wf.time, FPW_TIME_SCALE, 0);
     lv_obj_align(s_wf.time, LV_ALIGN_CENTER, 0, -56);
 
     // --- Date line ---

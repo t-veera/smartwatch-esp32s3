@@ -28,9 +28,17 @@
 #define FPW_FONT_LABEL   (&lv_font_montserrat_20)  // track names, section labels
 #define FPW_FONT_HINT    (&lv_font_montserrat_14)  // units, nav hints, status bar
 
-// Scale applied to the time label (256 = 100%). ~2.6x makes "02:03" span ~80%
-// of the 410px width.
-#define FPW_TIME_SCALE   666
+// Crisp clock face: Montserrat-Medium @112px, digits 0-9 and colon only,
+// generated with lv_font_conv. The watchface uses this so the time renders
+// sharp and the screen transition stays smooth (no per-frame transform scale).
+#ifdef __cplusplus
+extern "C" {
+#endif
+extern const lv_font_t font_time_112;
+#ifdef __cplusplus
+}
+#endif
+#define FPW_FONT_CLOCK  (&font_time_112)
 
 // --- Canvas ----------------------------------------------------------------
 #define FPW_SCREEN_W  410
