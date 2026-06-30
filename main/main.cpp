@@ -13,6 +13,7 @@
 #include "fpw_log.h"
 #include "fpw_nav.h"
 
+#include "driver/gpio.h"
 #include "esp_console.h"
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
@@ -50,6 +51,34 @@ void button_task(void *)
             }
         }
         vTaskDelay(pdMS_TO_TICKS(80));
+    }
+}
+
+// Poll the BOOT button (GPIO0); a press captures the calibration reference
+// (only valid while stationary and not logging).
+void boot_button_task(void *)
+{
+    gpio_config_t io = {};
+    io.pin_bit_mask = 1ULL << GPIO_NUM_0;
+    io.mode = GPIO_MODE_INPUT;
+    io.pull_up_en = GPIO_PULLUP_ENABLE;
+    io.pull_down_en = GPIO_PULLDOWN_DISABLE;
+    io.intr_type = GPIO_INTR_DISABLE;
+    gpio_config(&io);
+
+    bool prev_high = true;
+    TickType_t last = 0;
+    while (true) {
+        bool low = (gpio_get_level(GPIO_NUM_0) == 0);
+        if (low && prev_high) {   // falling edge = press
+            TickType_t now = xTaskGetTickCount();
+            if (now - last > pdMS_TO_TICKS(700)) {
+                last = now;
+                fpw_log_calibrate();   // ~1.5 s sampling window
+            }
+        }
+        prev_high = !low;
+        vTaskDelay(pdMS_TO_TICKS(40));
     }
 }
 
@@ -208,6 +237,7 @@ extern "C" void app_main(void)
     start_console();
     xTaskCreate(imu_task, "imu", 4096, nullptr, 2, nullptr);  // below the LVGL render task
     xTaskCreate(button_task, "btn", 4096, nullptr, 4, nullptr);
+    xTaskCreate(boot_button_task, "bootbtn", 4096, nullptr, 4, nullptr);
     fpw_power_init();
     fpw_log_init();   // mount SD for the Kart Telemetry Logger (PWR button start/stop)
 
