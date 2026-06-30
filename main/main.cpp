@@ -21,7 +21,9 @@
 
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <ctime>
+#include <dirent.h>
 
 namespace {
 constexpr char TAG[] = "fpw";
@@ -89,6 +91,49 @@ int cmd_settime(int argc, char **argv)
     return 0;
 }
 
+// List SD log files and print the head of the most recent kart_*.csv.
+int cmd_logdump(int, char **)
+{
+    DIR *d = opendir("/sdcard");
+    if (!d) {
+        printf("opendir /sdcard failed (no card?)\n");
+        return 0;
+    }
+    char latest[64] = "";
+    struct dirent *e;
+    while ((e = readdir(d)) != nullptr) {
+        if (strncmp(e->d_name, "kart_", 5) == 0) {
+            printf("  %s\n", e->d_name);
+            if (strcmp(e->d_name, latest) > 0) {
+                strncpy(latest, e->d_name, sizeof(latest) - 1);
+            }
+        }
+    }
+    closedir(d);
+    if (!latest[0]) {
+        printf("no kart_*.csv files\n");
+        return 0;
+    }
+    char path[80];
+    snprintf(path, sizeof(path), "/sdcard/%s", latest);
+    FILE *f = fopen(path, "r");
+    if (!f) {
+        printf("open failed: %s\n", path);
+        return 0;
+    }
+    printf("=== HEAD %s ===\n", path);
+    char line[160];
+    int n = 0;
+    while (n < 25 && fgets(line, sizeof(line), f)) {
+        printf("%s", line);
+        n++;
+    }
+    fseek(f, 0, SEEK_END);
+    printf("=== total %ld bytes ===\n", ftell(f));
+    fclose(f);
+    return 0;
+}
+
 void start_console()
 {
     esp_console_repl_t *repl = nullptr;
@@ -108,8 +153,13 @@ void start_console()
         .command = "settime", .help = "settime YYYY MM DD HH MM SS", .hint = nullptr,
         .func = &cmd_settime, .argtable = nullptr, .func_w_context = nullptr, .context = nullptr
     };
+    const esp_console_cmd_t c_dump = {
+        .command = "logdump", .help = "List SD logs + head of the latest CSV", .hint = nullptr,
+        .func = &cmd_logdump, .argtable = nullptr, .func_w_context = nullptr, .context = nullptr
+    };
     esp_console_cmd_register(&c_time);
     esp_console_cmd_register(&c_set);
+    esp_console_cmd_register(&c_dump);
     esp_console_start_repl(repl);
 }
 }  // namespace
