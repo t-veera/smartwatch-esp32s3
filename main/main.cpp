@@ -10,6 +10,7 @@
 #include "fpw_pmic.h"
 #include "fpw_power.h"
 #include "fpw_rtc.h"
+#include "fpw_log.h"
 #include "fpw_nav.h"
 
 #include "esp_console.h"
@@ -33,8 +34,8 @@ void imu_task(void *)
     }
 }
 
-// Poll the AXP2101 side button; a short press toggles the Trackpad app.
-// Debounced so one press can't fire twice and overlap two screen animations.
+// Poll the AXP2101 PWR button; a short press starts/stops a Kart Log session.
+// Debounced so one press fires once. Works regardless of display state.
 void button_task(void *)
 {
     TickType_t last = 0;
@@ -43,7 +44,7 @@ void button_task(void *)
             TickType_t now = xTaskGetTickCount();
             if (now - last > pdMS_TO_TICKS(600)) {
                 last = now;
-                fpw_nav_toggle_trackpad();
+                fpw_log_toggle();
             }
         }
         vTaskDelay(pdMS_TO_TICKS(80));
@@ -158,6 +159,7 @@ extern "C" void app_main(void)
     xTaskCreate(imu_task, "imu", 4096, nullptr, 2, nullptr);  // below the LVGL render task
     xTaskCreate(button_task, "btn", 4096, nullptr, 4, nullptr);
     fpw_power_init();
+    fpw_log_init();   // mount SD for the Kart Telemetry Logger (PWR button start/stop)
 
     ESP_LOGI(TAG, "Step 4 up — watchface + sleep/wake running.");
 }

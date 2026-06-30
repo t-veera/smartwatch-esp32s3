@@ -10,12 +10,15 @@
 #include "qmi8658.h"
 #include "esp_log.h"
 #include "esp_timer.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/semphr.h"
 #include <math.h>
 
 static const char *TAG = "fpw_imu";
 
 static qmi8658_dev_t s_imu;
 static bool s_ready = false;
+static SemaphoreHandle_t s_lock;   // serializes QMI8658 access (step task + logger)
 static volatile uint32_t s_steps = 0;
 static volatile bool s_motion_event = false;
 #define WAKE_MOTION_MG 250.0f   // AC magnitude that counts as a deliberate move
@@ -49,15 +52,24 @@ static bool try_init(uint8_t addr)
         return false;
     }
     qmi8658_enable_sensors(&s_imu, QMI8658_DISABLE_ALL);
+    // 250 Hz ODR so data is fresh at up to ~100 Hz logging.
     qmi8658_set_accel_range(&s_imu, QMI8658_ACCEL_RANGE_4G);
-    qmi8658_set_accel_odr(&s_imu, QMI8658_ACCEL_ODR_62_5HZ);
+    qmi8658_set_accel_odr(&s_imu, QMI8658_ACCEL_ODR_250HZ);
     qmi8658_enable_accel(&s_imu, true);
     qmi8658_set_accel_unit_mg(&s_imu, true);
+    // Gyro for telemetry logging (deg/s).
+    qmi8658_set_gyro_range(&s_imu, QMI8658_GYRO_RANGE_512DPS);
+    qmi8658_set_gyro_odr(&s_imu, QMI8658_GYRO_ODR_250HZ);
+    qmi8658_enable_gyro(&s_imu, true);
+    qmi8658_set_gyro_unit_dps(&s_imu, true);
     return true;
 }
 
 esp_err_t fpw_imu_init(void)
 {
+    if (!s_lock) {
+        s_lock = xSemaphoreCreateMutex();
+    }
     if (bsp_i2c_init() != ESP_OK) {
         return ESP_FAIL;
     }
@@ -84,13 +96,39 @@ esp_err_t fpw_imu_read_accel_mg(float *ax, float *ay, float *az)
 uint32_t fpw_imu_step_count(void) { return s_steps; }
 void     fpw_imu_reset_steps(void) { s_steps = 0; }
 
+esp_err_t fpw_imu_read_all(float *ax, float *ay, float *az,
+                           float *gx, float *gy, float *gz)
+{
+    if (!s_ready) {
+        return ESP_ERR_INVALID_STATE;
+    }
+    qmi8658_data_t d;
+    xSemaphoreTake(s_lock, portMAX_DELAY);
+    esp_err_t r = qmi8658_read_sensor_data(&s_imu, &d);
+    xSemaphoreGive(s_lock);
+    if (r != ESP_OK) {
+        return r;
+    }
+    // Accel configured in mg -> report g; gyro already in deg/s.
+    *ax = d.accelX / 1000.0f;
+    *ay = d.accelY / 1000.0f;
+    *az = d.accelZ / 1000.0f;
+    *gx = d.gyroX;
+    *gy = d.gyroY;
+    *gz = d.gyroZ;
+    return ESP_OK;
+}
+
 void fpw_imu_service(void)
 {
     if (!s_ready) {
         return;
     }
     float ax, ay, az;
-    if (qmi8658_read_accel(&s_imu, &ax, &ay, &az) != ESP_OK) {
+    xSemaphoreTake(s_lock, portMAX_DELAY);
+    esp_err_t r = qmi8658_read_accel(&s_imu, &ax, &ay, &az);
+    xSemaphoreGive(s_lock);
+    if (r != ESP_OK) {
         return;
     }
     float mag = sqrtf(ax * ax + ay * ay + az * az);

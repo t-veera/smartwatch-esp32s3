@@ -17,6 +17,10 @@ esp_err_t fpw_imu_init(void);
 bool      fpw_imu_ready(void);
 esp_err_t fpw_imu_read_accel_mg(float *ax, float *ay, float *az);
 
+// Combined accel (g) + gyro (deg/s) read for telemetry logging.
+esp_err_t fpw_imu_read_all(float *ax, float *ay, float *az,
+                           float *gx, float *gy, float *gz);
+
 // Call periodically (~50 Hz) to feed the step detector.
 void      fpw_imu_service(void);
 uint32_t  fpw_imu_step_count(void);

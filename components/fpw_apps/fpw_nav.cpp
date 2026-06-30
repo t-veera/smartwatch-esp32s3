@@ -2,6 +2,7 @@
 #include "ui_watchface.h"
 #include "ui_steps.h"
 #include "ui_trackpad.h"
+#include "ui_kartlog.h"
 #include "fpw_theme.h"
 #include "fpw_statusbar.h"
 
@@ -13,7 +14,7 @@ namespace {
 
 constexpr uint32_t ANIM_MS = 200;
 
-enum AppId { APP_STEPS, APP_CONNECT, APP_METRO, APP_RECORD, APP_COUNT };
+enum AppId { APP_STEPS, APP_CONNECT, APP_METRO, APP_KARTLOG, APP_COUNT };
 
 struct AppScreen {
     lv_obj_t *scr;
@@ -41,7 +42,7 @@ void watchface_gesture_cb(lv_event_t *)
         case LV_DIR_TOP:    load_screen(s_apps[APP_STEPS].scr,   LV_SCR_LOAD_ANIM_OVER_TOP);    break;
         case LV_DIR_BOTTOM: load_screen(s_apps[APP_CONNECT].scr, LV_SCR_LOAD_ANIM_OVER_BOTTOM); break;
         case LV_DIR_LEFT:   load_screen(s_apps[APP_METRO].scr,   LV_SCR_LOAD_ANIM_OVER_LEFT);   break;
-        case LV_DIR_RIGHT:  load_screen(s_apps[APP_RECORD].scr,  LV_SCR_LOAD_ANIM_OVER_RIGHT);  break;
+        case LV_DIR_RIGHT:  load_screen(s_apps[APP_KARTLOG].scr,  LV_SCR_LOAD_ANIM_OVER_RIGHT);  break;
         default: break;
     }
 }
@@ -155,8 +156,9 @@ extern "C" void fpw_nav_init(void)
     add_placeholder_body(setup_app_screen(APP_METRO, LV_DIR_RIGHT, LV_SCR_LOAD_ANIM_OVER_RIGHT), "Metronome");
     add_back_hint(s_apps[APP_METRO].scr);
 
-    add_placeholder_body(setup_app_screen(APP_RECORD, LV_DIR_LEFT, LV_SCR_LOAD_ANIM_OVER_LEFT), "Recorder");
-    add_back_hint(s_apps[APP_RECORD].scr);
+    lv_obj_t *kl_scr = setup_app_screen(APP_KARTLOG, LV_DIR_LEFT, LV_SCR_LOAD_ANIM_OVER_LEFT);
+    ui_kartlog_create(kl_scr);
+    add_back_hint(kl_scr);
 
     // Trackpad: opened only by the side button (toggle), not a swipe app and
     // with no status bar — the whole screen is the touch surface.
