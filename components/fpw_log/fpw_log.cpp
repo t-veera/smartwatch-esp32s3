@@ -4,6 +4,7 @@
 #include "bsp/esp32_s3_touch_amoled_2_06.h"
 
 #include "esp_log.h"
+#include "esp_pm.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -28,6 +29,7 @@ TaskHandle_t      s_task   = nullptr;
 volatile uint32_t s_count  = 0;
 int64_t           s_start_us = 0;
 char              s_fname[48] = "";
+esp_pm_lock_handle_t s_pm_lock = nullptr;   // held while recording (no light sleep)
 
 // --- Calibration (session orientation correction) ---
 volatile bool s_calibrated = false;
@@ -129,6 +131,9 @@ void logging_task(void *)
 
     s_start_us = esp_timer_get_time();
     s_count = 0;
+    if (s_pm_lock) {
+        esp_pm_lock_acquire(s_pm_lock);   // keep the CPU awake while recording
+    }
     ESP_LOGI(TAG, "REC start -> %s @ %d Hz", path, SAMPLE_HZ);
 
     const TickType_t period = pdMS_TO_TICKS(1000 / SAMPLE_HZ);
@@ -162,6 +167,9 @@ void logging_task(void *)
     fflush(f);
     fsync(fileno(f));
     fclose(f);
+    if (s_pm_lock) {
+        esp_pm_lock_release(s_pm_lock);
+    }
     ESP_LOGI(TAG, "REC stop: %lu samples in %.1fs -> %s",
              static_cast<unsigned long>(s_count),
              (esp_timer_get_time() - s_start_us) / 1e6, path);
@@ -172,6 +180,7 @@ void logging_task(void *)
 
 extern "C" void fpw_log_init(void)
 {
+    esp_pm_lock_create(ESP_PM_NO_LIGHT_SLEEP, 0, "kartlog", &s_pm_lock);
     s_sd_ok = (bsp_sdcard_mount() == ESP_OK);
     if (s_sd_ok) {
         ESP_LOGI(TAG, "SD card mounted at %s", BSP_SD_MOUNT_POINT);
@@ -186,7 +195,8 @@ extern "C" bool fpw_log_calibrate(void)
         ESP_LOGW(TAG, "stop logging before calibrating");
         return false;
     }
-    double sa[3] = {0}, sg[3] = {0}, sg_mag = 0;
+    vTaskDelay(pdMS_TO_TICKS(300));   // let the button-press motion settle
+    double sa[3] = {0}, sg[3] = {0}, sgsq[3] = {0};
     int got = 0;
     TickType_t last = xTaskGetTickCount();
     for (int i = 0; i < CAL_SAMPLES; i++) {
@@ -195,7 +205,7 @@ extern "C" bool fpw_log_calibrate(void)
         if (fpw_imu_read_all(&ax, &ay, &az, &gx, &gy, &gz) == ESP_OK) {
             sa[0] += ax; sa[1] += ay; sa[2] += az;
             sg[0] += gx; sg[1] += gy; sg[2] += gz;
-            sg_mag += sqrtf(gx*gx + gy*gy + gz*gz);
+            sgsq[0] += (double)gx*gx; sgsq[1] += (double)gy*gy; sgsq[2] += (double)gz*gz;
             got++;
         }
     }
@@ -206,11 +216,21 @@ extern "C" bool fpw_log_calibrate(void)
     float ra[3] = { (float)(sa[0]/got), (float)(sa[1]/got), (float)(sa[2]/got) };
     float rg[3] = { (float)(sg[0]/got), (float)(sg[1]/got), (float)(sg[2]/got) };
 
-    // Reject if the device was clearly moving during the window.
-    if (sg_mag / got > 8.0f) {
-        ESP_LOGW(TAG, "not stationary (%.1f dps) — hold still and retry", sg_mag / got);
+    // Stationarity is gyro JITTER (std-dev), independent of the constant bias we
+    // are capturing: a still device with a large fixed bias is fine; a moving
+    // one shows high variance.
+    double var = 0;
+    for (int k = 0; k < 3; k++) {
+        double m = sg[k] / got;
+        var += sgsq[k] / got - m * m;
+    }
+    float gstd = sqrtf((float)var);
+    if (gstd > 15.0f) {
+        ESP_LOGW(TAG, "moving during calibration (%.1f dps jitter) — hold still", gstd);
         return false;
     }
+    ESP_LOGI(TAG, "cal window: gyro bias(%.1f,%.1f,%.1f) jitter %.1f dps",
+             rg[0], rg[1], rg[2], gstd);
     float amag = sqrtf(ra[0]*ra[0] + ra[1]*ra[1] + ra[2]*ra[2]);
     if (amag < 0.5f) {
         ESP_LOGE(TAG, "calibration failed (accel %.2f g)", amag);

@@ -29,6 +29,11 @@ CONFIG_SPIRAM_SPEED_80M=y
 # --- FreeRTOS: 1kHz tick keeps LVGL animations smooth ---
 CONFIG_FREERTOS_HZ=1000
 
+# --- Power management: DFS only (no light sleep; light sleep drops the
+#     USB-Serial/JTAG and is unsafe to leave always-on). Battery-only light
+#     sleep to be revisited with a safe recovery path. ---
+CONFIG_PM_ENABLE=y
+
 # --- Main task gets headroom for UI bring-up ---
 CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192
 

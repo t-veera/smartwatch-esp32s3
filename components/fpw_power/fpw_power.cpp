@@ -10,6 +10,7 @@
 #include "fpw_imu.h"
 
 #include "esp_log.h"
+#include "esp_pm.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -24,6 +25,9 @@ constexpr uint32_t WAKE_DWELL_MS = 1500;   // ignore wrist motion right after sl
 constexpr uint32_t TOUCH_WAKE_MS = 800;    // recent touch activity threshold
 
 volatile bool s_display_on = true;
+
+esp_pm_lock_handle_t s_usb_awake_lock = nullptr;  // held while USB/charger attached
+bool s_usb_lock_held = false;
 
 void enter_sleep()
 {
@@ -57,6 +61,17 @@ void power_task(void *)
 
     uint32_t slept_at_ms = 0;
     while (true) {
+        // Stay fully awake while USB/charger is attached (console + USB serial
+        // keep working); allow light sleep only on battery.
+        bool vbus = bsp_power_is_vbus_in();
+        if (vbus && !s_usb_lock_held && s_usb_awake_lock) {
+            esp_pm_lock_acquire(s_usb_awake_lock);
+            s_usb_lock_held = true;
+        } else if (!vbus && s_usb_lock_held) {
+            esp_pm_lock_release(s_usb_awake_lock);
+            s_usb_lock_held = false;
+        }
+
         if (s_display_on) {
             if (lv_display_get_inactive_time(nullptr) >= IDLE_SLEEP_MS) {
                 enter_sleep();
@@ -80,6 +95,27 @@ void power_task(void *)
 
 extern "C" void fpw_power_init(void)
 {
+    // Dynamic frequency scaling + automatic light sleep: the CPU drops to
+    // 80 MHz and halts between activity when idle, waking on the touch/IMU
+    // interrupts. Drivers hold PM locks during transfers, and the logger holds
+    // a no-light-sleep lock while recording, so capture and the display are
+    // unaffected. On battery this is the big idle-drain saver; while USB is
+    // attached the console keeps it awake.
+    esp_pm_config_t pm = {};
+    pm.max_freq_mhz = 240;
+    pm.min_freq_mhz = 80;
+    pm.light_sleep_enable = false;   // DFS only — keep USB-Serial/JTAG alive
+    esp_err_t err = esp_pm_configure(&pm);
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "esp_pm_configure: %s", esp_err_to_name(err));
+    }
+
+    esp_pm_lock_create(ESP_PM_NO_LIGHT_SLEEP, 0, "usb_awake", &s_usb_awake_lock);
+    if (s_usb_awake_lock) {
+        esp_pm_lock_acquire(s_usb_awake_lock);   // assume USB attached at boot
+        s_usb_lock_held = true;
+    }
+
     xTaskCreate(power_task, "power", 4096, nullptr, 4, nullptr);
 }
 
